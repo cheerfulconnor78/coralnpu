@@ -293,6 +293,8 @@ class Csr(p: Parameters) extends Module {
 
   val mcycle    = RegInit(0.U(64.W))
   val minstret  = RegInit(0.U(64.W))
+  val minstretThisCycle_delayed = RegInit(0.U(64.W))
+  val minstret_val = minstret + minstretThisCycle_delayed
 
   // MXLEN, I,M,X extensions
   val misaValue = (if (p.xlen == 32) BigInt(0x40001100L) else BigInt("8000000000001100", 16)) |
@@ -426,8 +428,8 @@ class Csr(p: Parameters) extends Module {
       mspEn       -> msp,
       mcycleEn    -> mcycle(31,0),
       mcyclehEn   -> mcycle(63,32),
-      minstretEn  -> minstret(31,0),
-      minstrethEn -> minstret(63,32),
+      minstretEn  -> minstret_val(31,0),
+      minstrethEn -> minstret_val(63,32),
       mvendoridEn -> mvendorid,
       marchidEn   -> Cat(0.U(31.W), marchid),
       mimpidEn    -> Cat(0.U(31.W), mimpid),
@@ -525,8 +527,8 @@ class Csr(p: Parameters) extends Module {
   val minstret_tl = Mux(minstretEn, wdata, minstret(31,0))
   val minstret_t = Cat(minstret_th, minstret_tl)
   val minstret_written = is_csr_write && (minstretEn || minstrethEn)
-  val minstretThisCycle = io.counters.nRetired
-  minstret := Mux(minstret_written, minstret_t, minstret + minstretThisCycle)
+  minstretThisCycle_delayed := Mux(minstret_written, 0.U, io.counters.nRetired)
+  minstret := Mux(minstret_written, minstret_t, minstret + minstretThisCycle_delayed)
 
   val trigger_enabled = tdata1.isTrigger6 && tdata1.m
   val trigger_match = trigger_enabled && io.dm.current_pc === tdata2

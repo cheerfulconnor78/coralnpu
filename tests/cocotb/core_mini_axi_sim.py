@@ -522,3 +522,29 @@ async def core_mini_axi_backdoor_load_test(dut):
   await core_mini_axi.wait_for_halted()
   assert core_mini_axi.dut.io_fault.value == 0
   dut._log.info("Backdoor load comparison test passed!")
+
+
+@cocotb.test()
+async def core_mini_axi_minstret_test(dut):
+  """Runs minstret_test.elf and verifies the value of minstret_val."""
+  fixture = await Fixture.Create(dut)
+  r = runfiles.Create()
+  elf_path = r.Rlocation("coralnpu_hw/tests/cocotb/minstret_test.elf")
+
+  await fixture.load_elf_and_lookup_symbols(
+      elf_path,
+      symbols=['minstret_val']
+  )
+
+  # Run the test to halt (mpause)
+  await fixture.run_to_halt()
+
+  # Read minstret_val from memory
+  minstret_val_bytes = await fixture.read_word('minstret_val')
+  minstret_val = int.from_bytes(minstret_val_bytes, byteorder='little')
+
+  dut._log.info(f"minstret_val read from memory: {minstret_val}")
+
+  # We assert strictly equal to 118 (master behavior) to catch timing-fix changes that violate architectural contract.
+  assert minstret_val == 118
+

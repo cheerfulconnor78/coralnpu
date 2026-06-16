@@ -35,6 +35,7 @@ COCOTB_TEST_BINARY_TARGETS = glob(["**/*.elf"]) + glob(["**/*.o"]) + [
     ":float_hazard_tests.elf",
     ":finish_txn_before_halt.elf",
     ":math.elf",
+    ":minstret_test.elf",
     ":stress_test.elf",
     ":unreachable_prefetch_fault.elf",
     ":vector_store_fault.elf",
@@ -117,6 +118,7 @@ CORE_MINI_AXI_SIM_TESTCASES = [
     "unreachable_prefetch_fault",
     "core_mini_axi_frm_test",
     "core_mini_axi_backdoor_load_test",
+    "core_mini_axi_minstret_test",
 ]
 # END_TESTCASES_FOR_core_mini_axi_sim_cocotb
 
@@ -585,6 +587,13 @@ coralnpu_v2_binary(
     name = "noop",
     srcs = [
         "noop.cc",
+    ],
+)
+
+coralnpu_v2_binary(
+    name = "minstret_test",
+    srcs = [
+        "minstret_test.cc",
     ],
 )
 
