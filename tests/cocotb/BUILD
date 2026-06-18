@@ -715,6 +715,7 @@ RVV_ML_OPS_TESTCASES = [
     "core_mini_rvv_float_matmul_c_test",
     "core_mini_rvv_float_matmul_asm_test",
     "core_mini_rvv_float_matmul_optimized_c_test",
+    "core_mini_rvv_gelu_test",
 ]
 # END_TESTCASES_FOR_rvv_ml_ops_cocotb_test
 

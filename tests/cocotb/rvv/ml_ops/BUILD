@@ -70,6 +70,10 @@ template_rule(
             "itcm_size_kbytes": 512,
             "dtcm_size_kbytes": 512,
         },
+        "rvv_gelu_test": {
+            "srcs": ["rvv_gelu_kernel.cc", "rvv_gelu_runner.cc"],
+            "hdrs": ["//sw/utils:utils.h"],
+        },
     },
 )
 
@@ -82,5 +86,6 @@ filegroup(
         ":rvv_float_matmul.elf",
         ":rvv_float_matmul_optimized.elf",
         ":rvv_flashattention_test.elf",
+        ":rvv_gelu_test.elf",
     ],
 )

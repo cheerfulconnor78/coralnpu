@@ -34,6 +34,19 @@ def log_matmul_metrics(dut, test_name: str, cycles: int, lhs_rows: int,
     dut._log.info(banner)
 
 
+def log_elementwise_metrics(dut, test_name: str, cycles: int, total_elements: int):
+    """Calculate and log metrics for element-wise vector operations like GELU."""
+    cycles_per_element = cycles / total_elements
+    banner = (f"\n{'='*60}\n"
+              f" PERFORMANCE METRICS: {test_name}\n"
+              f"{'-'*60}\n"
+              f"  Total Cycles       : {cycles:,}\n"
+              f"  Total Elements     : {total_elements:,}\n"
+              f"  Cycles / Element   : {cycles_per_element:.2f}\n"
+              f"{'='*60}")
+    dut._log.info(banner)
+
+
 @cocotb.test()
 async def core_mini_rvv_matmul_c_test(dut):
     """Test integer matmul with RVV C intrinsics."""
@@ -367,6 +380,74 @@ async def core_mini_rvv_flashattention_test(dut):
     )
 
     # Assert with a slight tolerance due to the software exponential approximation
+    np.testing.assert_allclose(
+        actual_output,
+        expected_output,
+        rtol=1e-3,
+        atol=1e-3,
+        err_msg=debug_msg
+    )
+
+
+def golden_gelu(x):
+    """NumPy Golden Reference for Gaussian Error Linear Unit (GELU)."""
+    # Using the standard tanh approximation formula commonly used in deep learning acceleration:
+    # 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
+    return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * np.power(x, 3))))
+
+
+@cocotb.test()
+async def core_mini_rvv_gelu_test(dut):
+    """Injects the GELU activation RVV kernel into the Coral NPU simulation,
+    feeds it a test vector, and verifies accuracy against the golden reference.
+    """
+    r = runfiles.Create()
+    
+    # Use standard memory map simulation model boundary parameters 
+    fixture = await Fixture.Create(dut)
+    
+    rng = np.random.default_rng(seed=42)
+
+    # 1. THE INJECTION: Locate and load the compiled GELU runner ELF binary
+    elf_name = "rvv_gelu_test.elf"
+    elf_path = r.Rlocation(f"coralnpu_hw/tests/cocotb/rvv/ml_ops/{elf_name}")
+
+    await fixture.load_elf_and_lookup_symbols(
+        elf_path,
+        ["in_buf", "out_buf", "csr_cycle_count"]
+    )
+
+    # 2. DATA GENERATION
+    total_elements = 1024  
+    x_data = rng.uniform(-4.0, 4.0, (total_elements,)).astype(np.float32)
+
+    # 3. CONTEXT RESET & INGESTION
+    await fixture.core_mini_axi.reset()
+    await fixture.write("in_buf", x_data.flatten())
+    await fixture.write("out_buf", np.zeros_like(x_data).flatten())
+
+    # 4. SIMULATION EXECUTION
+    await fixture.run_to_halt(timeout_cycles=1000000)
+
+    # Read tracking registers
+    csr_cycle_count = (await fixture.read_word('csr_cycle_count')).view(np.uint32)[0]
+    
+    log_elementwise_metrics(dut, f"core_mini_rvv_gelu_{total_elements}", csr_cycle_count, total_elements)
+
+    # 5. READBACK & VALIDATION
+    num_bytes = total_elements * 4  # 4 bytes per float32
+    actual_packed = await fixture.read("out_buf", num_bytes)
+    actual_output = actual_packed.view(np.float32)
+
+    expected_output = golden_gelu(x_data)
+
+    debug_msg = (
+        f"GELU Activation discrepancy detected!\n"
+        f"Input sample:     {x_data[:4]}\n"
+        f"Expected output:  {expected_output[:4]}\n"
+        f"Actual hardware:  {actual_output[:4]}"
+    )
+
     np.testing.assert_allclose(
         actual_output,
         expected_output,
